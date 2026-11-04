@@ -128,6 +128,8 @@ def format_telegram(row: sqlite3.Row, cls: dict) -> str:
     if tags:
         lines.append(f"<i>Tags:</i> {e(tags)} · {e(cls.get('horizon', ''))}")
     lines.append(f"{e(row['source'])} · {fmt_ist(published)}")
+    if cls.get("method") == "keyword":
+        lines.append("<i>⚙️ Keyword score (free mode, no AI)</i>")
     url = row["url"] or ""
     if url.startswith("http"):
         lines.append(f'<a href="{e(url, quote=True)}">Open source</a>')

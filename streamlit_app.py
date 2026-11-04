@@ -85,6 +85,8 @@ def card(it: dict) -> str:
         title = f'<a href="{e(url, quote=True)}" target="_blank">{title}</a>'
     tags = ", ".join((it.get("sectors") or []) + (it.get("symbols") or []))
     bell = " · 🔔 alerted" if it.get("alerted") else ""
+    if it.get("method") == "keyword":
+        bell += " · ⚙️ keyword score"
     return f"""
 <div class="ne-card" style="border-left-color:{color}">
   <div class="ne-top">

@@ -4,6 +4,7 @@ from __future__ import annotations
 import html
 import json
 import logging
+import os
 from datetime import datetime
 
 from .alerts import Alerter
@@ -26,6 +27,11 @@ WATCH TODAY: scheduled events or risks during market hours, if any are mentioned
 Keep it under 350 words. Do not invent facts that are not in the items."""
 
 
+def _has_key() -> bool:
+    k = os.getenv("ANTHROPIC_API_KEY", "").strip()
+    return k.startswith("sk-ant-") and len(k) > 30
+
+
 def is_due(store: Store, cfg: dict, holidays: set[str]) -> bool:
     now = now_ist()
     if not cfg.get("enabled", True) or not is_trading_day(now.date(), holidays):
@@ -44,6 +50,13 @@ def build_and_send(store: Store, cfg: dict, alerter: Alerter, holidays: set[str]
     if not rows:
         body = f"Quiet: no material news scored since {fmt_ist(since)}."
         text = f"☀️ <b>PRE-MARKET BRIEF · {now.strftime('%a %d-%b')}</b>\n\n{body}"
+    elif not _has_key():
+        # Free mode: no AI summary, just the top scored headlines since the close.
+        lines = [f"{'▲' if json.loads(r['classification'])['direction'] == 'bullish' else '▼' if json.loads(r['classification'])['direction'] == 'bearish' else '•'} "
+                 f"{r['impact']}/10  {r['title']}" for r in rows[:12]]
+        body = "Keyword-scored headlines (no AI):\n" + "\n".join(lines)
+        text = (f"☀️ <b>PRE-MARKET BRIEF · {now.strftime('%a %d-%b')}</b>\n"
+                f"<i>{len(rows)} items since {fmt_ist(since)}</i>\n\n{html.escape(body)}")
     else:
         items = []
         for r in rows:

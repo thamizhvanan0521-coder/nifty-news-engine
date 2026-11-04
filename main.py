@@ -71,6 +71,11 @@ def load_config() -> dict:
     return cfg
 
 
+def has_claude_key() -> bool:
+    k = os.getenv("ANTHROPIC_API_KEY", "").strip()
+    return k.startswith("sk-ant-") and len(k) > 30
+
+
 def build_sources(cfg: dict, session, universe: Universe) -> list:
     sc = cfg["sources"]
     fast = int(cfg["poll"]["market_seconds"])
@@ -103,9 +108,16 @@ class Engine:
         self.last_fetch: dict[str, float] = {}
         self.fail_count: dict[str, int] = {}
         self.classifier = None
+        self.ai = has_claude_key()
         if need_claude:
-            from engine.classifier import Classifier
-            self.classifier = Classifier(cfg.get("claude", {}))
+            if self.ai:
+                from engine.classifier import Classifier
+                self.classifier = Classifier(cfg.get("claude", {}))
+                log.info("scoring mode: Claude AI")
+            else:
+                from engine.keyword_classifier import KeywordClassifier
+                self.classifier = KeywordClassifier(self.prefilter)
+                log.info("scoring mode: KEYWORD (free) - no valid ANTHROPIC_API_KEY found")
 
     # ---- 1. fetch
     def fetch_all(self, force: bool = False) -> list[NewsItem]:
@@ -170,7 +182,7 @@ class Engine:
             if not rows:
                 break
             key = f"claude_calls_{now_ist().date().isoformat()}"
-            if int(self.store.get_meta(key, "0")) >= cap:
+            if self.ai and int(self.store.get_meta(key, "0")) >= cap:
                 log.warning("daily Claude cap (%d) reached; %d+ items waiting", cap, len(rows))
                 break
             try:
@@ -179,7 +191,8 @@ class Engine:
                 log.error("classify failed, will retry next cycle: %s", e)
                 break
             finally:
-                self.store.incr_counter(key)
+                if self.ai:
+                    self.store.incr_counter(key)
             for r in rows:
                 cls = results.get(r["uid"])
                 if not cls:
@@ -267,7 +280,7 @@ def cmd_recent(cfg: dict, hours: int, min_impact: int) -> None:
 
 
 FEED_FIELDS = ("impact", "direction", "category", "scope", "sectors", "symbols",
-               "horizon", "summary", "why")
+               "horizon", "summary", "why", "method")
 
 
 def cmd_export(cfg: dict) -> Path:

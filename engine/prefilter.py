@@ -62,6 +62,7 @@ class Prefilter:
     def __init__(self, cfg: dict, universe: Universe, heavyweights: set[str]):
         kw = {**DEFAULT_KEYWORDS, **(cfg.get("extra_keywords") or {})}
         self.patterns = [(_pattern(k), float(w)) for k, w in kw.items()]
+        self.keywords = [(k, p) for k, (p, _w) in zip(kw, self.patterns)]   # phrase -> pattern
         noise = DEFAULT_NOISE + list(cfg.get("extra_noise") or [])
         self.noise = [_pattern(n) for n in noise]
         self.universe = universe
