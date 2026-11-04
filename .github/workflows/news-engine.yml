@@ -1,0 +1,71 @@
+name: news-engine
+
+# Times are UTC. IST = UTC + 5:30.
+# Weekdays 07:30-16:30 IST: every 10 min. All other times: every 30 min.
+# Minutes avoid :00 because GitHub delays jobs most at the top of the hour.
+on:
+  schedule:
+    - cron: "3,13,23,33,43,53 2-10 * * 1-5"
+    - cron: "17,47 0-1,11-23 * * *"
+    - cron: "17,47 2-10 * * 0,6"
+  workflow_dispatch: {}
+
+concurrency:
+  group: news-engine
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 9
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-engine.txt
+
+      - name: Install
+        run: pip install -r requirements-engine.txt
+
+      # The SQLite state (what was already seen/scored) lives in the Actions cache between runs.
+      - name: Restore state
+        uses: actions/cache/restore@v4
+        with:
+          path: data
+          key: state-${{ github.run_id }}
+          restore-keys: state-
+
+      - name: Run engine
+        env:
+          NEWS_ENGINE_CLOUD: "1"
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          mkdir -p data
+          python main.py once
+          python main.py export
+
+      - name: Save state
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: data
+          key: state-${{ github.run_id }}
+
+      # feed.json goes to a separate 'data' branch with no history, so the repo never grows.
+      - name: Publish feed
+        run: |
+          cd public
+          git init -q
+          git checkout -q -b data
+          git add feed.json
+          git -c user.name="news-engine" -c user.email="news-engine@users.noreply.github.com" \
+              commit -q -m "feed $(date -u +%Y-%m-%dT%H:%MZ)"
+          git push -q -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" data

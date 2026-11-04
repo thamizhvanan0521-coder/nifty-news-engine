@@ -1,0 +1,104 @@
+# ============================================================
+#  Thamizh News Engine — config
+#  Secrets (API key, Telegram) go in .env, not here.
+# ============================================================
+
+poll:
+  market_window: ["08:00", "16:00"]   # IST; faster polling inside this window
+  market_seconds: 120
+  off_hours_seconds: 600
+
+# Items older than this when first seen are stored as 'stale' and never scored.
+max_age_hours: 18
+
+# Which index constituents count for NSE corporate filings:
+# nifty50 | nifty100 | nifty200 | nifty500 | all
+universe: nifty100
+
+# Top NIFTY weights — news on these gets a lower alert threshold.
+# Edit when index weights change.
+heavyweights: [HDFCBANK, RELIANCE, ICICIBANK, INFY, BHARTIARTL, TCS, LT, ITC, SBIN, AXISBANK, KOTAKBANK]
+
+prefilter:
+  min_score: 3             # items below this skip Claude
+  extra_keywords: {}       # e.g. {"adani": 2, "hindenburg": 3}
+  extra_noise: []          # phrases that mark an item as junk
+
+claude:
+  classify_model: claude-haiku-5-5
+  brief_model: claude-sonnet-5-5
+  batch_size: 12
+  max_batches_per_cycle: 8
+  max_calls_per_day: 400   # hard cap on classify calls (cost guard)
+
+alerts:
+  telegram: true
+  desktop: true
+  sound: true
+  min_impact: 7              # alert anything >= 7
+  heavyweight_min_impact: 6  # ... or >= 6 if it names a heavyweight
+  max_age_minutes: 90        # never alert news older than this
+  quiet_hours: ["23:00", "06:00"]   # Telegram silent, no popup/sound
+
+brief:
+  enabled: true
+  time: "08:45"              # IST, sent once between this and 09:15
+  min_impact: 4
+  telegram: true
+  desktop: true
+
+# What the web page shows (written to public/feed.json after every run).
+export:
+  hours: 72
+  min_impact: 2
+  max_items: 600
+  keep_days: 7         # older rows are deleted from the state DB
+
+# NSE trading holidays (YYYY-MM-DD). Fill from the NSE holiday list each year.
+# Weekends are skipped automatically.
+nse_holidays: []
+
+sources:
+  nse_announcements: true
+  bse_announcements: false   # NSE already covers all index stocks
+
+  # tier: official | india_media | global
+  rss:
+    # --- Official ---
+    - {name: RBI Press Releases,   tier: official,    url: "https://www.rbi.org.in/pressreleases_rss.xml"}
+    - {name: RBI Notifications,    tier: official,    url: "https://www.rbi.org.in/notifications_rss.xml"}
+    - {name: SEBI,                 tier: official,    url: "https://www.sebi.gov.in/sebirss.xml"}
+    # --- Indian business media ---
+    - {name: ET Markets,           tier: india_media, url: "https://economictimes.indiatimes.com/markets/rssfeeds/1977021501.cms"}
+    - {name: ET Economy,           tier: india_media, url: "https://economictimes.indiatimes.com/news/economy/rssfeeds/1373380680.cms"}
+    # Moneycontrol's own RSS feeds are frozen (last item Apr) - covered via Google News below.
+    - {name: Mint Markets,        tier: india_media, url: "https://www.livemint.com/rss/markets"}
+    - {name: Mint Economy,         tier: india_media, url: "https://www.livemint.com/rss/economy"}
+    - {name: Business Standard Markets, tier: india_media, url: "https://www.business-standard.com/rss/markets-106.rss"}
+    - {name: Business Standard Economy, tier: india_media, url: "https://www.business-standard.com/rss/economy-102.rss"}
+    - {name: BusinessLine Markets, tier: india_media, url: "https://www.thehindubusinessline.com/markets/feeder/default.rss"}
+    # --- Global ---  (CNBC feeds return 403; Reuters covered via Google News below)
+    - {name: Investing Economy,   tier: global,      url: "https://www.investing.com/rss/news_14.rss"}
+    - {name: Investing Commodities,tier: global,      url: "https://www.investing.com/rss/news_11.rss"}
+    - {name: MarketWatch Top,      tier: global,      url: "https://feeds.content.dowjones.io/public/rss/mw_topstories"}
+
+  # Google News searches (last 24h, India edition) — catch-all for anything the feeds miss.
+  google_news_interval: 600
+  google_news:
+    - {q: "RBI monetary policy repo rate", tier: india_media}
+    - {q: "SEBI F&O derivatives rules",    tier: india_media}
+    - {q: "FII FPI selling buying India",  tier: india_media}
+    - {q: "Sensex Nifty today",            tier: india_media}
+    - {q: "India CPI inflation GDP data",  tier: india_media}
+    - {q: "rupee dollar RBI",              tier: india_media}
+    - {q: "GIFT Nifty",                    tier: india_media}
+    - {q: "site:moneycontrol.com markets", tier: india_media}
+    - {q: "site:moneycontrol.com economy", tier: india_media}
+    - {q: "markets site:reuters.com",      tier: global}
+    - {q: "economy site:reuters.com",      tier: global}
+    - {q: "US Federal Reserve interest rates", tier: global}
+    - {q: "US inflation jobs data",        tier: global}
+    - {q: "crude oil prices OPEC",         tier: global}
+    - {q: "US tariffs India trade",        tier: global}
+    - {q: "Middle East war oil",           tier: global}
+    - {q: "China economy stimulus markets",tier: global}
